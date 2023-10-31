@@ -119,6 +119,7 @@ int * BatchMandelCalculator::calculateMandelbrot () {
 
 			// width
 			for (int j = 0; j < N_width; j++) {
+				#pragma omp simd
 				for (int jj = 0; jj < TILE; jj++) {
 					int width_index = j * TILE + jj;
 					int height_index = i * TILE + ii;
@@ -132,19 +133,19 @@ int * BatchMandelCalculator::calculateMandelbrot () {
 					float zImag = y;
 
 					// b = true;
-					#pragma omp simd // reduction (&:b)
+					// #pragma omp simd // reduction (&:b)
 					for (int iteration = 0; iteration < limit; iteration++) {
 						float r2 = zReal * zReal;
 						float i2 = zImag * zImag;
 
 						if (r2 + i2 > 4.0f) {
-							// value = iteration;
-							// break;
+							value = iteration;
+							break;
 							// b &= false;
 							// b = false;
-							if (value == limit) {
-								value = iteration;
-							}
+							// if (value == limit) {
+							// 	value = iteration;
+							// }
 						}
 
 						zImag = 2.0f * zReal * zImag + y;

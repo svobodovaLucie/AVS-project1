@@ -19,7 +19,7 @@ public:
 private:
     // @TODO add all internal parameters
     int *data;
-    float *tmp;
+    // float *tmp;
 };
 
 #endif

@@ -106,10 +106,11 @@ int * BatchMandelCalculator::calculateMandelbrot () {
 int * BatchMandelCalculator::calculateMandelbrot () {
 	int *pdata = data;
 
+	int size = height / 2;
 	int TILE = 64;	// TODO
 	int p = 2;	// TODO parametr, modulo, celociselne deleni atd.
 	int N_width = width/TILE;
-	int N_height = height/TILE;
+	int N_height = height/(TILE*2);
 	bool b;
 
 	// height
@@ -131,24 +132,26 @@ int * BatchMandelCalculator::calculateMandelbrot () {
 					float zImag = y;
 
 					// b = true;
-					// #pragma omp simd // reduction (&:b)
+					#pragma omp simd // reduction (&:b)
 					for (int iteration = 0; iteration < limit; iteration++) {
 						float r2 = zReal * zReal;
 						float i2 = zImag * zImag;
 
 						if (r2 + i2 > 4.0f) {
-							value = iteration;
-							break;
+							// value = iteration;
+							// break;
 							// b &= false;
-							// if (value == limit) {
-							// 	value = iteration;
-							// }
+							// b = false;
+							if (value == limit) {
+								value = iteration;
+							}
 						}
 
 						zImag = 2.0f * zReal * zImag + y;
 						zReal = r2 - i2 + x;
 					}
 					pdata[height_index * width + width_index] = value;
+					pdata[(height - height_index - 1) * width + width_index] = value;
 					// if (b) break;
 				}
 			}

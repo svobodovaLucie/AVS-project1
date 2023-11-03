@@ -22,6 +22,8 @@ LineMandelCalculator::LineMandelCalculator (unsigned matrixBaseSize, unsigned li
 	//data = (int *)(malloc(height * width * sizeof(int)));
 	data = (int *)(_mm_malloc(height * width * sizeof(int), ALIGN));
 	complex_tmp = (float *)(_mm_malloc(2 * width * sizeof(float), ALIGN));
+	x_real = (float *)(_mm_malloc(width * sizeof(float), ALIGN));
+	tmp_data = (int *)(_mm_malloc(width * sizeof(int), ALIGN));
 }
 
 LineMandelCalculator::~LineMandelCalculator() {
@@ -29,20 +31,23 @@ LineMandelCalculator::~LineMandelCalculator() {
 	data = NULL;
 	_mm_free(complex_tmp);
 	complex_tmp = NULL;
+	_mm_free(x_real);
+	x_real = NULL;
+	_mm_free(tmp_data);
+	complex_tmp = NULL;
 }
 
 int * LineMandelCalculator::calculateMandelbrot () {
 	int *pdata = data;
 	float *pcomplexReal = complex_tmp;
 	float *pcomplexImag = complex_tmp+1;
-
+	float *pxReal = x_real;
+	int *ptmp = tmp_data;
 	float y, x, r2, i2;
-
-	// initialize data array to limit value
-	std::uninitialized_fill(data, data + width*height, limit);
 
 	// initialize the complex_tmp array
 	for (int i = 0; i < height/2; i++) {
+
 		y = y_start + i * dy;				// current imaginary value
 
 		// set the initial values
@@ -50,23 +55,30 @@ int * LineMandelCalculator::calculateMandelbrot () {
 		// set the initial values for x
 		pcomplexReal = complex_tmp;
 		pcomplexImag = complex_tmp+1;
-		#pragma omp simd aligned(pcomplexReal: 64)
+		pxReal = x_real;
+
+		#pragma omp simd simdlen(64)
 		for (int j = 0; j < width; j++) {
-			*pcomplexReal = x_start + j * dx;
-			pcomplexReal += 2;
+			*pxReal = x_start + j * dx;
+			*pcomplexReal = *(pxReal++);
+			pcomplexReal+=2;
 		}
+
+		std::uninitialized_fill(tmp_data, tmp_data + width, limit);
+		ptmp = tmp_data;
 		
 		// iterations
 		for (int l = 0; l < limit; l++) {
 			pcomplexReal = complex_tmp;
 			pcomplexImag = complex_tmp+1;
+			pxReal = x_real;
+			ptmp = tmp_data;
 
 			int sum = 0;
-			#pragma omp simd reduction(+:sum) aligned(pcomplexReal, pcomplexImag: 64) // simdlen(1024)
+			#pragma omp simd reduction(+:sum) simdlen(64) aligned(pcomplexReal, pcomplexImag: 64) // simdlen(1024)
 			for (int j = 0; j < width; j++) {
-				// stop the width loop when reduction...
 
-				x = x_start + j * dx;		// current real value
+				//x = x_start + j * dx;		// current real value
 
 				// calculate one iteration of mandelbrot
 				// with the use of tmp value in pcomplex
@@ -74,28 +86,27 @@ int * LineMandelCalculator::calculateMandelbrot () {
 				i2 = *pcomplexImag * *pcomplexImag;
 
 				if (r2 + i2 > 4.0f) {
-					if (data[i*width+j] == limit) {
-					//if (*pdata == -1) {
-						//*pdata = l;
-						data[i*width+j] = l;
-						// *pdata = l;
-						data[(height-i-1)*width+j] = l;
+					if (*ptmp == limit) {
+						*ptmp = l;
 					}
 					sum++;
 				}
 
 				// update complex tmp
 				*pcomplexImag = 2.0f * *pcomplexReal * *pcomplexImag + y;
-				*pcomplexReal = r2 - i2 + x;
-
+				*pcomplexReal = r2 - i2 + *(pxReal++);
+	
 				pcomplexImag+=2;
 				pcomplexReal+=2;
+
+				ptmp++;
 			}
 
 			// if all are good -> end the iterations loop
 			if (sum == width) break;
 		}
-		// update pdata pointer
+		memcpy(data + (i*width), tmp_data, width*sizeof(int));
+		memcpy(data + (height-i-1)*width, tmp_data, width*sizeof(int));
 	}
 
 	return data;

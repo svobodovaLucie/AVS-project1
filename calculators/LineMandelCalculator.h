@@ -15,6 +15,8 @@ public:
     int *calculateMandelbrot();
 
 private:
-    // @TODO add all internal parameters
     int *data;
+    float *complex_tmp;
+    float *complexReal;
+    float *complexImag;
 };

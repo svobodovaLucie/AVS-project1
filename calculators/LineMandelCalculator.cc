@@ -22,8 +22,6 @@ LineMandelCalculator::LineMandelCalculator (unsigned matrixBaseSize, unsigned li
 	//data = (int *)(malloc(height * width * sizeof(int)));
 	data = (int *)(_mm_malloc(height * width * sizeof(int), ALIGN));
 	complex_tmp = (float *)(_mm_malloc(2 * width * sizeof(float), ALIGN));
-	complexReal = (float *)(_mm_malloc(width * sizeof(float), ALIGN));
-	complexImag = (float *)(_mm_malloc(width * sizeof(float), ALIGN));
 }
 
 LineMandelCalculator::~LineMandelCalculator() {
@@ -31,18 +29,12 @@ LineMandelCalculator::~LineMandelCalculator() {
 	data = NULL;
 	_mm_free(complex_tmp);
 	complex_tmp = NULL;
-	_mm_free(complexReal);
-	complex_tmp = NULL;
-	_mm_free(complexImag);
-	complex_tmp = NULL;
 }
 
 int * LineMandelCalculator::calculateMandelbrot () {
 	int *pdata = data;
-	// float *pcomplexReal = complex_tmp;
-	// float *pcomplexImag = complex_tmp+1;
-	float *real = complexReal;
-	float *imag = complexImag;
+	float *pcomplexReal = complex_tmp;
+	float *pcomplexImag = complex_tmp+1;
 
 	float y, x, r2, i2;
 
@@ -54,33 +46,23 @@ int * LineMandelCalculator::calculateMandelbrot () {
 		y = y_start + i * dy;				// current imaginary value
 
 		// set the initial values
-		// std::uninitialized_fill(complex_tmp, complex_tmp + 2*width, y);
-		// std::uninitialized_fill(complexReal, complex_tmp + width, x);
-		std::uninitialized_fill(complexImag, complexImag + width, y);
+		std::uninitialized_fill(complex_tmp, complex_tmp + 2*width, y);
 		// set the initial values for x
-
-		real = complexReal;
-		#pragma omp simd aligned(real: 64)
+		pcomplexReal = complex_tmp;
+		pcomplexImag = complex_tmp+1;
+		#pragma omp simd aligned(pcomplexReal: 64)
 		for (int j = 0; j < width; j++) {
-			*(real++) = x_start + j * dx;
-			// *pcomplexReal = x;
-			// pcomplexReal += 2;
+			*pcomplexReal = x_start + j * dx;
+			pcomplexReal += 2;
 		}
-
-		// pcomplexReal = complex_tmp;
-		// pcomplexImag = complex_tmp+1;
-
-		// pcomplex = complex_tmp;
+		
 		// iterations
 		for (int l = 0; l < limit; l++) {
-
-			// width loop
-			//bool b = false;
-			real = complexReal;
-			imag = complexImag;
+			pcomplexReal = complex_tmp;
+			pcomplexImag = complex_tmp+1;
 
 			int sum = 0;
-			#pragma omp simd reduction(+:sum) aligned(real, imag: 64) // simdlen(1024)
+			#pragma omp simd reduction(+:sum) aligned(pcomplexReal, pcomplexImag: 64) // simdlen(1024)
 			for (int j = 0; j < width; j++) {
 				// stop the width loop when reduction...
 
@@ -88,21 +70,10 @@ int * LineMandelCalculator::calculateMandelbrot () {
 
 				// calculate one iteration of mandelbrot
 				// with the use of tmp value in pcomplex
-				// TODO transform to pointer++
-				// zReal = complex_tmp[2*j];
-				// zImag = complex_tmp[2*j+1];
+				r2 = *pcomplexReal * *pcomplexReal;
+				i2 = *pcomplexImag * *pcomplexImag;
 
-				// zReal = *pcomplexReal;
-				// zImag = *pcomplexImag;
-
-				// r2 = zReal * zReal;
-				// i2 = zImag * zImag;
-				// r2 = *pcomplexReal * *pcomplexReal;
-				// i2 = *pcomplexImag * *pcomplexImag;
-				r2 = *real * *real;
-				i2 = *imag * *imag;
-
-				if (r2 + i2 > 4.0) {
+				if (r2 + i2 > 4.0f) {
 					if (data[i*width+j] == limit) {
 					//if (*pdata == -1) {
 						//*pdata = l;
@@ -114,37 +85,18 @@ int * LineMandelCalculator::calculateMandelbrot () {
 				}
 
 				// update complex tmp
-				// complex_tmp[2*j+1] = 2.0f * zReal * zImag + y;
-				// complex_tmp[2*j] = r2 - i2 + x;
-				// *pcomplexImag = 2.0f * zReal * zImag + y;
-				// *pcomplexReal = r2 - i2 + x;
-				// *pcomplexImag = 2.0f * *pcomplexReal * *pcomplexImag + y;
-				// *pcomplexReal = r2 - i2 + x;
-				*imag = 2.0f * *real * *imag + y;
-				*real = r2 - i2 + x;
+				*pcomplexImag = 2.0f * *pcomplexReal * *pcomplexImag + y;
+				*pcomplexReal = r2 - i2 + x;
 
-				// pcomplexImag+=2;
-				// pcomplexReal+=2;
-				real++;
-				imag++;
+				pcomplexImag+=2;
+				pcomplexReal+=2;
 			}
-			// pcomplexReal = complex_tmp;
-			// pcomplexImag = complex_tmp+1;
 
 			// if all are good -> end the iterations loop
 			if (sum == width) break;
 		}
-		// pcomplexImag = complex_tmp+1;
-		// pcomplexReal = complex_tmp;
 		// update pdata pointer
 	}
-
-	// for (int i = 0; i < width*height; ++i) {
-	// 	printf("%d ", data[i]);
-	// }
-
-	real = complexReal;
-	imag = complexImag;
 
 	return data;
 }

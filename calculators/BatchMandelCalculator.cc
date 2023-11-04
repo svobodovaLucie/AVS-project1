@@ -20,8 +20,9 @@ BatchMandelCalculator::BatchMandelCalculator (unsigned matrixBaseSize, unsigned 
 	BaseMandelCalculator(matrixBaseSize, limit, "BatchMandelCalculator")
 {
 	data = (int *)(_mm_malloc(height * width * sizeof(int), 64));
-	complex_tmp = (float *)(_mm_malloc(2 * 64 * 64 * sizeof(float), 64));
-	// tmp_data = (int *)(_mm_malloc(64 * 64 * sizeof(int), 64));
+	complex_tmp = (float *)(_mm_malloc(2 * 64 * sizeof(float), 64));
+	tmp_data = (int *)(_mm_malloc(64 * sizeof(int), 64));
+	// x_init = (float *)(_mm_malloc(64 * sizeof(float), 64));
 }
 
 BatchMandelCalculator::~BatchMandelCalculator() {
@@ -29,11 +30,94 @@ BatchMandelCalculator::~BatchMandelCalculator() {
 	data = NULL;
 	_mm_free(complex_tmp);
 	complex_tmp = NULL;
-	// _mm_free(tmp_data);
-	// complex_tmp = NULL;
+	_mm_free(tmp_data);
+	complex_tmp = NULL;
+	// _mm_free(x_init);
+	// x_init = NULL;
 }
 
 int * BatchMandelCalculator::calculateMandelbrot () {
+	float *pcomplexReal;
+	float *pcomplexImag;
+	int *ptmp = tmp_data;
+	// float *pxInit = x_init;
+	float y, x, r2, i2;
+	int sum;
+	int TILE = 64;
+	int TILE_sizeofint = TILE*sizeof(int);
+
+	int N_width = width/TILE;
+
+	// height loop
+	for (int i = 0; i < height/2; i++) {
+
+		// current imaginary value
+		y = y_start + i * dy;
+
+		
+		// #pragma omp simd simdlen(64) aligned(pcomplexReal, pcomplexImag: 64) reduction(+:sum)
+			for (int j = 0; j < N_width; j++) {
+				
+				// set the initial imaginary values
+				std::uninitialized_fill(complex_tmp, complex_tmp + 2*TILE, y);
+				// set the initial real values
+				pcomplexReal = complex_tmp;
+				// pxInit = x_init;
+				int j_TILE = j*TILE;
+				#pragma omp simd simdlen(64)
+				for (int jj = 0; jj < TILE; jj++) {
+					*pcomplexReal = x_start + (j_TILE+jj) * dx;
+					// *(pxInit++) = *pcomplexReal;
+					pcomplexReal+=2;
+				}
+
+				// set the initial tmp_data with limit
+				std::uninitialized_fill(tmp_data, tmp_data + TILE, limit);
+
+
+				// iterations
+				for (int l = 0; l < limit; l++) {
+					pcomplexReal = complex_tmp;
+					pcomplexImag = complex_tmp+1;
+					ptmp = tmp_data;
+					// pxInit = x_init;
+					sum = 0;
+
+					// width loop 
+					#pragma omp simd simdlen(64) aligned(pcomplexReal, pcomplexImag: 64) reduction(+:sum)
+					// for (int j = 0; j < width/64; j++) {
+						// inner loop with TILE size
+						for (int jj = 0; jj < TILE; jj++) {
+							// calculate one iteration of mandelbrot
+							r2 = *pcomplexReal * *pcomplexReal;
+							i2 = *pcomplexImag * *pcomplexImag;
+
+							if (r2 + i2 > 4.0f) {
+								if (*ptmp == limit)
+									*ptmp = l;
+								sum++;
+							}
+
+							// update complex tmp
+							*pcomplexImag = 2.0f * *pcomplexReal * *pcomplexImag + y;
+							*pcomplexReal = r2 - i2 + (x_start + (j_TILE+jj) * dx);
+				
+							pcomplexImag+=2;
+							pcomplexReal+=2;
+							ptmp++;
+							// pxInit++;
+						}
+						// end the iterations before reaching the limit
+						if (sum == width) break;
+					}
+					memcpy(data + (i*width)+j_TILE, tmp_data, TILE_sizeofint);
+					memcpy(data + (height-i-1)*width+j_TILE, tmp_data, TILE_sizeofint);
+				}
+	}
+
+	return data;
+
+	/*
 	float *pcomplexReal = complex_tmp;
 	float *pcomplexImag = complex_tmp+1;
 	float y, x, r2, i2;
@@ -101,6 +185,8 @@ int * BatchMandelCalculator::calculateMandelbrot () {
 	}
 
 	return data;
+
+	*/
 
 
 /*

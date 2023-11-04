@@ -18,9 +18,9 @@ public:
 
 private:
     int *data;
-    int *tmp_data;
+    // int *tmp_data;
     float *complex_tmp;
-    // float *x_init;
+    float *x_init;
 };
 
 #endif

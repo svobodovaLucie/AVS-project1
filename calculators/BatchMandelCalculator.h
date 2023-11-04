@@ -17,9 +17,9 @@ public:
     int * calculateMandelbrot();
 
 private:
-    // @TODO add all internal parameters
     int *data;
-    // float *tmp;
+    // int *tmp_data;
+    float *complex_tmp;
 };
 
 #endif
